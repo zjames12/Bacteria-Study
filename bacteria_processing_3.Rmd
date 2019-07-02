@@ -1,0 +1,255 @@
+---
+title: "bacteria_processing_3"
+author: "Ilya"
+date: "6/24/2019"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+####install and load required packages
+```{r packages, echo=FALSE}
+source("packages_bacteria1.R")
+devtools::install_github("guiastrennec/ggplus")
+library(ggplus)
+#https://github.com/guiastrennec/ggplus
+```
+
+
+###1. Get bacteria-caused dx in GIDEON   
+###2. Match dx to pathogen spp. names
+###3. Match spp. names (from GIDEON zdx and GMPD) to traits (in GMPD & other)
+###4. Compile master list of bacteria spp & traits
+###5. Feature construction with bacterial traits
+###6. Data visualization: summary “state of knowledge” on bacteria causing disease in mammals or humans
+###7. Use traits to predict transmissibility and human disease outcomes
+
+###2. Match dx to pathogen spp. names
+
+####Check what fields are in bacteria_species_out2.Rdata
+bacteria_species_out2 includes pathogenic and non-pathogenic bacteria
+```{r}
+#commenting this out for now because it doesn't do anything new
+#source("R_graph_bacteria_order_pathogen_status3.R")
+```
+
+###read in BacDive data accessed by Wanjia Song
+
+###find out fields with at least threshold % coverage
+```{r get_proportion}
+load("../DATA/PROCESSED/Data from Backdive-2.RData")
+
+threshold = 0.01
+D = merge
+dim(D)
+D = unique(D)
+dim(D)
+#rm(merge)
+#remove NA values
+inds.na = which(!is.na(D$value))
+D = D[inds.na,]
+id_len=length(unique(D$bacdive_id))
+D$new_field = paste(D$section, D$subsection, D$field)
+save(D, file = "../DATA/PROCESSED/D.Rdata")
+count=as.data.frame(table(D$new_field))#combination of subsection and field
+var1=count$Var1
+freq=count$Freq
+var<-list()
+freqs<-list()
+for (i in 1:length(freq)) {
+     if (freq[i]>=threshold*id_len) {#this will get fields greater than 1%
+         var[[i]]=var1[i]
+         freqs[[i]]=freq[i]
+     }
+}
+
+df=do.call(rbind, Map(data.frame, Feature_name=var, Frequency=freqs))
+
+df$Fraction = df$Frequency/id_len
+###get those seen at least 20% of time
+df20 = subset(df, Fraction >= 0.2)
+write.csv(df20, file ="variables_20_percent_coverage.csv")
+
+###get those seen at least 10% of time
+df10 = subset(df, Fraction >= 0.1)
+write.csv(df10, file ="variables_10_percent_coverage.csv")
+
+###get those seen at least 5% of time
+df05 = subset(df, Fraction >= 0.05)
+write.csv(df05, file ="variables_5_percent_coverage.csv")
+
+###get those seen at least 1% of time
+df01 = subset(df, Fraction >= 0.01)
+save(df01, file = "../DATA/PROCESSED/df01.Rdata")
+```
+
+#use df01 to subset all data for those variables
+```{r subset_01}
+load("../DATA/PROCESSED/D.RData")
+
+merge01 = subset(D, new_field %in% df01$Feature_name)
+save(merge01, file = "../DATA/PROCESSED/merge01.Rdata")
+
+merge20 = subset(D, new_field %in% df20$Feature_name)
+save(merge20, file = "../DATA/PROCESSED/merge20.Rdata")
+
+
+```
+
+###spread from long to wide
+```{r spread}
+load("../DATA/PROCESSED/merge01.Rdata")
+load("../DATA/PROCESSED/merge20.Rdata")
+#merge01 = merge01[c(1:100),]
+ptm <- proc.time()
+
+# spreadDf = spread(merge01, key = new_field, value = value)
+spreadDf = spread(merge20, key = new_field, value = value)
+dim(spreadDf)
+print(proc.time() - ptm)
+
+save(spreadDf, file = "../DATA/PROCESSED/spreadDf.Rdata")
+```
+
+```{r}
+load("../DATA/PROCESSED/merge20.Rdata")
+
+library("dplyr")
+library("tidyr")
+datasets_20 <- merge20 %>% 
+  unlist() %>% 
+  bind_rows() %>% #binding many data frames into one
+  gather(grouped_category, value, 1:ncol(.)) %>%
+  separate(grouped_category, sep = "\\.", 
+           into = c("bacdive_id", 
+                    "section", #e.g.,morphology_physiology
+                    "subsection", #e.g.,cell_morphology
+                    "field" #"cell_shape"
+                    )) %>%
+  
+    #Retain only unique/distinct rows from an input tbl.
+unique.data.frame()
+
+dim(datasets_20)
+```
+
+
+
+
+###SCRATCH below here
+
+###use df10, variables with coverage over 10%, to subset all data
+```{r}
+
+
+# df10 = read.csv("variables_10_percent_coverage.csv")
+# D = merge
+# dim(D)
+# D = unique(D)
+# dim(D)
+# #rm(merge)
+# 
+# #id_len=length(unique(D$bacdive_id))
+# D$new_field = paste(D$section, D$subsection, D$field)
+# count=as.data.frame(table(D$new_field))#combination of 
+# 
+# merge10 = subset(D, new_field %in% df10$Feature_name)
+# save(merge10, file = "merge10.Rdata")
+
+```
+
+
+##make histogram plot of every variable.
+```{r}
+
+# load("merge10.Rdata")
+# 
+# plot <- ggplot(merge10, aes(x = value))+
+#   geom_histogram(stat="count")+
+#   theme(axis.text.x = element_text(angle = 90))
+# # +
+# #   facet_wrap(~new_field)
+# 
+# pdf('multiple_page_plot_2_per_page.pdf')
+# # Plot on multiple pages (output plot to R/Rstudio)
+# facet_multiple(plot = plot, 
+#                facets = 'new_field', 
+#                ncol = 1, 
+#                nrow = 2,
+#                scales = "free")
+# dev.off()
+#plot
+#ggsave(plot = plot, file = "histogram_10.jpg")
+```
+
+
+##make histogram plot of only quantitative variables of interest
+```{r}
+
+# load("merge10.Rdata")
+# fieldsCategorized = read.csv("variables_10_percent_coverage - 1.csv")
+# fieldsQuantitative = subset(fieldsCategorized,
+#                             quantitative.or.categorical == "quantitative")
+# 
+# dfQuantitative = subset(merge10, new_field %in% fieldsQuantitative$Feature_name)
+# 
+# #this changes to NA some that have ranges
+# dfQuantitative$value=as.numeric(as.character(dfQuantitative$value))
+# plot <- ggplot(dfQuantitative, aes(x = value))+
+#   geom_histogram()+
+#   theme(axis.text.x = element_text(angle = 90))
+# # +
+# #   facet_wrap(~new_field)
+# 
+# pdf('multiple_page_plot_quantitative.pdf')
+# # Plot on multiple pages (output plot to R/Rstudio)
+# facet_multiple(plot = plot, 
+#                facets = 'new_field', 
+#                ncol = 1, 
+#                nrow = 2,
+#                scales = "free")
+# dev.off()
+```
+
+
+##make histogram plot of only qualitative variables of interest
+```{r}
+
+# load("merge10.Rdata")
+# fieldsCategorized = read.csv("variables_10_percent_coverage - 1.csv")
+# fieldsCategorical = subset(fieldsCategorized,
+#                             quantitative.or.categorical == "categorical")
+# 
+# dfCategorical = subset(merge10, new_field %in% fieldsCategorical$Feature_name)
+# 
+# plot <- ggplot(dfCategorical, aes(x = value))+
+#   geom_histogram(stat = "count")+
+#   theme(axis.text.x = element_text(angle = 90))
+# # +
+# #   facet_wrap(~new_field)
+# 
+# pdf('multiple_page_plot_categorical.pdf')
+# # Plot on multiple pages (output plot to R/Rstudio)
+# facet_multiple(plot = plot, 
+#                facets = 'new_field', 
+#                ncol = 1, 
+#                nrow = 2,
+#                scales = "free")
+# dev.off()
+```
+
+
+
+
+
+####load pathogenic bacteria species. Subset to include only zoonotic
+Read in Gideon_Outbreaks_Bacterium_Mammal_Non-Human.csv. Left off: change to 0 empty cells in column Total.Outbreak.Cases..Approximate.
+```{r}
+source("R_human_pathogen_outbreaks.R")
+```
+
+
+
