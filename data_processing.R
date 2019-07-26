@@ -16,7 +16,7 @@ inds.na = which(!is.na(D$value))
 D = D[inds.na,]
 id_len=length(unique(D$bacdive_id))
 D$new_field = paste(D$section, D$subsection, D$field)
-save(D, file = "../DATA/PROCESSED/D.Rdata")
+# save(D, file = "../DATA/PROCESSED/D.Rdata")
 count=as.data.frame(table(D$new_field))#combination of subsection and field
 var1=count$Var1
 freq=count$Freq
@@ -34,7 +34,8 @@ df=do.call(rbind, Map(data.frame, Feature_name=var, Frequency=freqs))
 df$Fraction = df$Frequency/id_len
 ###get those seen at least 20% of time
 df20 = subset(df, Fraction >= 0.2)
-# write.csv(df20, file ="variables_20_percent_coverage.csv")
+write.csv(df20, file ="variables_20_percent_coverage.csv")
+df20 <- read.csv(file ="variables_20_percent_coverage.csv")
 # 
 # ###get those seen at least 10% of time
 # df10 = subset(df, Fraction >= 0.1)
@@ -66,7 +67,7 @@ write.csv(q, file = "df.csv", row.names = F)
 nzv <- nearZeroVar(q,saveMetrics=TRUE,freqCut = 95/5)
 nzv <- row.names(nzv[which(nzv$nzv==TRUE),])
 dropnzv<-names(q[ , which(names(q) %in% nzv)])
-q<-q[ , -which(names(q) %in% nzv)]
+q <- q[ , -which(names(q) %in% nzv)]
 write.csv(q, file = "dropnzvdata.csv", row.names = F)
 
 dmy <- dummyVars(" ~ .", data = q,fullRank = T, sep=".")
